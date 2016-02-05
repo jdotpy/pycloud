@@ -1,0 +1,42 @@
+## Every good library should have a goal API. 
+## This file is just to document the ideal usage.
+
+######################
+### CLI Tool
+
+# Use Local information only
+pycloudctrl initcloud ~/clouds/my-new-cloud
+pycloudctrl control <hostname or ip> -n myNewName -e environment_name -t tag1,tag2
+pycloudctrl exec "tag=tag2" "echo foobar"
+
+# Turn a pycloud into a web service
+pycloudweb ~/clouds/my-existing-cloud
+Running webserver on localhost:1337
+
+# Run commands through a pycloud web
+pycloudctrl --cloud https://mycloud
+
+
+######################
+### Python Interface 
+
+from pycloud import PyCloud import Cloud, SSHKey, BashTask
+
+cloud = Cloud({
+	'hosts': {'name': 'myHostName'}
+})
+
+class MyLoadTask(BashTask):
+    cmd = 'uptime'
+    description = 'Determine load average over last 15minutes'
+
+    def parse(self, output):
+        return {
+		'load': output.split()[-1]
+	}
+
+hosts = cloud.search('tag=ubuntu')
+hosts.run_task(MyTask, hosts=[])
+# Should give:
+# [Dev]  hostName1	2.5
+# [Live] hostName2	2.5
