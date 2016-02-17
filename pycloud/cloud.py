@@ -4,7 +4,7 @@ class ImproperlyConfigured(ValueError):
     pass
 
 class PyCloud():
-    required_settings = ('name',)
+    required_settings = ('name','secret_key')
 
     def __init__(self, config):
         if not isinstance(config, Configuration):
@@ -16,3 +16,13 @@ class PyCloud():
         for setting in self.required_settings:
             if self.config.get(setting) is None:
                 raise ImproperlyConfigured('Improperly configured: Missing {} setting'.format(setting))
+
+
+class Operation():
+    pass
+
+class Task():
+    pass
+
+class HostQuery():
+    pass
