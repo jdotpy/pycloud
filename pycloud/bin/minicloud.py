@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 
 from quickconfig import Configuration
-from pycloud.cloud import Cloud, new_cloud, Host
-from pycloud.net import SSHGroup
+from pycloud.minicloud.utils import create_project, path_exists
+from pycloud.core.cloud import Cloud, Host
 
 import argparse
 import shlex
@@ -71,9 +71,17 @@ class CLIHandler():
         options = parser.parse_args(args)
         return vars(options)
 
-    def init(self, *args, **kwargs):
-        print('Initializing project')
-        new_cloud()
+    def init(self, path):
+        if path_exists(path):
+            print('Path already exists')
+            return False
+
+        name = input('What would you like the project to be called?')
+        use_existing = input('Would you like to generate a key for this?')
+        create_project(path, {
+            'name': name,
+            'datasource': path
+        })
 
     def help(self, *args):
         print('help you? no. Not even with:', args)

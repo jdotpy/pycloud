@@ -1,14 +1,6 @@
 from quickconfig import Configuration
 from .security import generate_secret_key, KeyPair
 
-def new_cloud(name='Anonymous'):
-    config = {
-        'name': name,
-        'secret_key': generate_secret_key(),
-        'key': KeyPair().get_keypair_str()
-    }
-    return Cloud(config)
-
 class Cloud():
     def __init__(self, config=None):
         if config is None:
