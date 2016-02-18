@@ -34,8 +34,6 @@ class SSHSession(threading.Thread):
                     stderr += channel.recv_stderr(self.MAX_RECV_BYTES)
                 if channel.recv_ready():
                     stdout += channel.recv(self.MAX_RECV_BYTES)
-                if stream is not None:
-                    self.stream.log(
                 if exit_status is not None:
                     break
                 time.sleep(.1)
