@@ -1,1 +1,1 @@
-from cloud import PyCloud
+from .cloud import Cloud

@@ -1,7 +1,8 @@
 #!/usr/bin/env python
 
 from quickconfig import Configuration
-from pycloud.cloud import PyCloud, ImproperlyConfigured
+from pycloud.cloud import Cloud, new_cloud, Host
+from pycloud.net import SSHGroup
 
 import argparse
 import shlex
@@ -13,7 +14,7 @@ class CLIHandler():
         '~/.pycloud.yaml',
         'pycloud.yaml'
     ]
-    NO_CLOUD_COMMANDS = ['init', 'help']
+    NO_CLOUD_COMMANDS = ['init', 'help', 'ssh']
     COMMANDS = {
         # command name, function
         'help': {
@@ -21,6 +22,9 @@ class CLIHandler():
         },
         'init': {
             'func': 'init'
+        },
+        'ssh': {
+            'func': 'ssh'
         }
     }
 
@@ -36,7 +40,7 @@ class CLIHandler():
         command_parts = options['commands']
         command_name, args = command_parts[0], command_parts[1:]
         if self.cloud is None and command_name not in self.NO_CLOUD_COMMANDS:
-            self.cloud = self._setup_cloud()
+            self.cloud = self._setup_cloud({})
     
         if command_name not in self.COMMANDS:
             command_name = 'help'
@@ -57,7 +61,7 @@ class CLIHandler():
             cloud = PyCloud(config)
         except ImproperlyConfigured as e:
             cloud = None
-            print 'Could not configure cloud'
+            print('Could not configure cloud')
         return cloud
 
     def _parse_args(self, args):
@@ -68,10 +72,16 @@ class CLIHandler():
         return vars(options)
 
     def init(self, *args, **kwargs):
-        print 'Initializing project'
+        print('Initializing project')
+        new_cloud()
 
     def help(self, *args):
-        print 'help you? no. Not even with:', args
+        print('help you? no. Not even with:', args)
+
+    def ssh(self, *args):
+        group = SSHGroup([], max_pool_size=2)
+        group.run_command('for i in {1..5}; do echo "$i";sleep 1; done')
+
 
 if __name__ == '__main__':
     CLIHandler().run_command(sys.argv[1:])

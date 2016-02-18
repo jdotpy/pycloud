@@ -1,11 +1,12 @@
 from paramiko.rsakey import RSAKey
 from os import urandom
 import io
+from base64 import b64encode
 
-def generate_secret_key(length=128)
+def generate_secret_key(length=128):
     random = urandom(length)
     key = b64encode(random).decode('utf-8')
-    return token
+    return key
 
 class KeyPair():
     KEY_SIZE = 4096
@@ -21,7 +22,7 @@ class KeyPair():
 
     def private_key_str(self):
         buf = io.StringIO()
-        key.write_private_key(buf)
+        self._key.write_private_key(buf)
         private = buf.read()
         return self._key
 

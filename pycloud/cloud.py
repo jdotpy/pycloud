@@ -1,22 +1,39 @@
 from quickconfig import Configuration
+from .security import generate_secret_key, KeyPair
 
-class ImproperlyConfigured(ValueError):
-    pass
+def new_cloud(name='Anonymous'):
+    config = {
+        'name': name,
+        'secret_key': generate_secret_key(),
+        'key': KeyPair().get_keypair_str()
+    }
+    return Cloud(config)
 
-class PyCloud():
-    required_settings = ('name','secret_key')
-
-    def __init__(self, config):
+class Cloud():
+    def __init__(self, config=None):
+        if config is None:
+            config = {}
         if not isinstance(config, Configuration):
             config = Configuration(config)
         self.config = config
-        self._validation()
 
-    def _validation(self):
-        for setting in self.required_settings:
-            if self.config.get(setting) is None:
-                raise ImproperlyConfigured('Improperly configured: Missing {} setting'.format(setting))
+class Host():
+    def __init__(self, hostname, username=None, password=None, pkey=None, name=None):
+        if name is None:
+            name = hostname
 
+        self.hostname = hostname
+        self.username = username
+        self.password = password
+        self.pkey = pkey
+        self.name = name
+
+    def credentials(self):
+        return {
+            'username': self.username,
+            'password': self.password
+        }
+        
 
 class Operation():
     pass
