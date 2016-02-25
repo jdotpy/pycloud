@@ -1,16 +1,24 @@
 from ..core.cloud import Cloud
 from ..core.security import generate_secret_key, KeyPair
+from .datasource import JsonDataSource
 import os
 import errno
 import yaml
 
-def new_cloud(name='Anonymous'):
+def new_cloud(path, name='Anonymous'):
+    if path_exists(path):
+        raise ValueError('Path Already Exists!')
+    key = KeyPair()
+    datasource_path = path + '/data.json'
     config = {
         'name': name,
+        'datasource': datasource_path,
         'secret_key': generate_secret_key(),
+        'private_key': key.private_key_str()
     }
-    cloud = Cloud(config)
-    cloud.set_default_credentials('pycloud', '')
+    create_project(path, config)
+    cloud = Cloud(config, datasource=JsonDataSource(datasource_path))
+    cloud.datasource._save(key)
 
 def path_exists(path):
     return os.path.exists(path)
@@ -23,5 +31,6 @@ def create_project(path, config):
             pass
         else:
             raise
-    with open(path + '/' + 'pycloud.yaml', 'w') as f:
+    with open(path + '/' + 'config.yaml', 'w') as f:
         f.write(yaml.dump(config))
+    os.makedirs(path + '/' + 'data.yaml')
