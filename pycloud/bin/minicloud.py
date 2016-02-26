@@ -16,7 +16,7 @@ class CLIHandler():
         '~/.pycloud.yaml',
         'config.yaml'
     ]
-    NO_CLOUD_COMMANDS = ['init', 'help', 'encrypt']
+    NO_CLOUD_COMMANDS = ['init', 'help', 'encrypt', 'file']
     COMMANDS = {
         # command name, function
         'help': {
@@ -30,6 +30,9 @@ class CLIHandler():
         },
         'ssh': {
             'func': 'ssh'
+        },
+        'file': {
+            'func': 'file'
         },
         'encrypt': {
             'func': 'encrypt'
@@ -110,6 +113,15 @@ class CLIHandler():
         ciphertext = key.encrypt(text)
         decrypted_text = key.decrypt(ciphertext)
         print('Plain: "{}" \nCiphertext: "{}" \nDecrypted: "{}"'.format(text, ciphertext, decrypted_text))
+
+    def file(self):
+        from pycloud.core.security import PrivateFile as PF
+        with PF('mine.txt', 'w') as f:
+            f.write('foobar!')
+        with PF('mine.txt', 'r') as f:
+            contents = f.read()
+        print('private file contents:', contents)
+
 
 if __name__ == '__main__':
     CLIHandler().run_command(sys.argv[1:])

@@ -1,5 +1,5 @@
 from ..core.cloud import Cloud
-from ..core.security import generate_secret_key, KeyPair
+from ..core.security import generate_secret_key, KeyPair, PrivateFile
 from .datasource import JsonDataSource
 import os
 import errno
@@ -31,6 +31,6 @@ def create_project(path, config):
             pass
         else:
             raise
-    with open(path + '/' + 'config.yaml', 'w') as f:
+    with PrivateFile(path + '/' + 'config.yaml', 'w') as f:
         f.write(yaml.dump(config))
     os.makedirs(path + '/' + 'data.yaml')
