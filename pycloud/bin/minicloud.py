@@ -19,9 +19,6 @@ class CLIHandler():
     NO_CLOUD_COMMANDS = ['init', 'help', 'encrypt', 'file']
     COMMANDS = {
         # command name, function
-        'help': {
-            'func': 'help'
-        },
         'info': {
             'func': 'info'
         },
@@ -31,11 +28,15 @@ class CLIHandler():
         'ssh': {
             'func': 'ssh'
         },
-        'file': {
-            'func': 'file'
-        },
-        'encrypt': {
-            'func': 'encrypt'
+        'register': {
+            'func': 'register',
+            'args': {
+                'hostname': {},
+                ('-n','--name'): {},
+                ('-e','--env'): {},
+                ('-e','--env'): {},
+                ('-t','--tags'): {'nargs': '*'},
+            }
         }
     }
 
@@ -48,21 +49,18 @@ class CLIHandler():
 
     def run_command(self, args):
         options = self._parse_args(args)
-        command_parts = options['commands']
-        command_name, args = command_parts[0], command_parts[1:]
-        if self.cloud is None and command_name not in self.NO_CLOUD_COMMANDS:
-            self.cloud = self._setup_cloud(options)
-    
-        if command_name not in self.COMMANDS:
-            command_name = 'help'
-            args.insert(0, command_name)
+        command_name = options.pop('command')
+        if not command_name:
+            options = self._parse_args(args + ['-h'])
 
+        if self.cloud is None and command_name not in self.NO_CLOUD_COMMANDS:
+            self.cloud = self._setup_cloud(options.pop('config'))
+    
         command = self.COMMANDS[command_name]
         func = getattr(self, command['func'])
-        func(*args)
+        func(**options)
 
-    def _setup_cloud(self, options):
-        config_file = options['config']
+    def _setup_cloud(self, config_file=None):
         if config_file:
             sources = [config_file]
         else:
@@ -81,10 +79,16 @@ class CLIHandler():
         return cloud
 
     def _parse_args(self, args):
-        parser = argparse.ArgumentParser(description='Process some integers.')
-        parser.add_argument('commands', nargs="+", metavar="cmd")
-        parser.add_argument('--config', required=False, default=None)
-        options = parser.parse_args(args)
+        root_parser = argparse.ArgumentParser(description='Mini cloud!')
+        subparsers = root_parser.add_subparsers(dest='command')
+        for cmd_name, cmd_info in self.COMMANDS.items():
+            cmd_parser = subparsers.add_parser(cmd_name)
+            cmd_parser.add_argument('--config', default=None)
+            for cmd_args, cmd_options in cmd_info.get('args', {}).items():
+                if isinstance(cmd_args, str):
+                    cmd_args = [cmd_args]
+                cmd_parser.add_argument(*cmd_args, **cmd_options)
+        options = root_parser.parse_args(args)
         return vars(options)
 
     def init(self, path):
@@ -107,21 +111,13 @@ class CLIHandler():
         group = SSHGroup([], max_pool_size=2)
         group.run_command('for i in {1..5}; do echo "$i";sleep 1; done')
 
-    def encrypt(self, *args):
-        text = 'my text'
-        key = KeyPair()
-        ciphertext = key.encrypt(text)
-        decrypted_text = key.decrypt(ciphertext)
-        print('Plain: "{}" \nCiphertext: "{}" \nDecrypted: "{}"'.format(text, ciphertext, decrypted_text))
-
-    def file(self):
-        from pycloud.core.security import PrivateFile as PF
-        with PF('mine.txt', 'w') as f:
-            f.write('foobar!')
-        with PF('mine.txt', 'r') as f:
-            contents = f.read()
-        print('private file contents:', contents)
-
+    def register(self, hostname=None, name=None, tags=None, env='default', *args, **kwargs):
+        """ Register a new host """
+        if name is None:
+            name = hostname
+        print('Registring host [{}] {} ({}) (Tags: {})'.format(
+            env, name, hostname, tags
+        ))
 
 if __name__ == '__main__':
     CLIHandler().run_command(sys.argv[1:])
