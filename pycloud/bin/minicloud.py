@@ -37,7 +37,8 @@ class CLIHandler():
                 'ssh_command': {'help': 'Command to run'},
                 ('-n','--name'): {},
                 ('-e','--env'): {},
-                ('-t','--tags'): {'nargs': '*'}
+                ('-t','--tags'): {'nargs': '*'},
+                ('--summary'): {'action': 'store_true', 'default': False}
             }
         },
         'register': {
@@ -124,14 +125,18 @@ class CLIHandler():
         for host in self.cloud.hosts:
             print(host)
 
-    def ssh(self, ssh_command=None, name=None, tags=None, env=None):
+    def ssh(self, ssh_command=None, name=None, tags=None, env=None, summary=False):
         hosts = self.cloud.query({'name': name, 'tags': tags, 'env': env})
         if not hosts:
             print('No hosts found!')
-        else:
-            group = SSHGroup(hosts, max_pool_size=10)
-            results = group.run_command(ssh_command)
-            print(results)
+            return False
+
+        group = SSHGroup(hosts, max_pool_size=10)
+        results = group.run_command(ssh_command)
+
+        show_stdout = True
+        show_stderr = not summary
+        print(results.display(show_stderr=show_stderr, show_stdout=show_stdout))
 
     def register(self, hostname=None, name=None, tags=None, env='default', user=None, password=None, ask_for_pass=False):
         """ Register a new host """

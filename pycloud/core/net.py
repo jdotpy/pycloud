@@ -48,9 +48,20 @@ class SSHGroupResult():
         self.results[host] = result
 
     def __str__(self):
+        return self.display()
+
+    def display(self, show_stderr=False, show_stdout=False, show_summary=True):
         output = []
         for host, result in self.results.items():
-            output.append('{}: {}'.format(host, result))
+            for exit_code, stdout, stderr in result.output:
+                if show_stdout and stdout:
+                    for line in stdout.splitlines():
+                        output.append('{}<<out>>: {}'.format(host, line))
+                if show_stderr and stderr:
+                    for line in stderr.splitlines():
+                        output.append('{}<<err>>: {}'.format(host, line))
+            if not result.executed or show_summary:
+                output.append('{}: {}'.format(host, result))
         return '\n'.join(output)
 
     def success(self):
