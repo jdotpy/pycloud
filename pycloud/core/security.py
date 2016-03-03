@@ -1,6 +1,7 @@
 from paramiko.rsakey import RSAKey
 from Crypto.Cipher import PKCS1_OAEP
 from Crypto.PublicKey import RSA
+import json
 import stat
 import os
 import io
@@ -14,13 +15,13 @@ def generate_secret_key(length=128):
 class KeyPair():
     KEY_SIZE = 4096
 
-    def __init__(self, source=None):
-        if source is None:
-            self._key = RSAKey.generate(self.KEY_SIZE)
-        elif isinstance(source, str):
-            self._key = RSAKey(file_obj=io.StringIO(source))
+    def __init__(self, private_key=None, private_key_path=None):
+        if private_key:
+            self._key = RSAKey(file_obj=io.StringIO(private_key))
+        elif private_key_path:
+            self._key = RSAKey(filename=private_key_path)
         else:
-            raise ValueError('Unsupported key source')
+            self._key = RSAKey.generate(self.KEY_SIZE)
 
     def public_key_str(self):
         return self._key.get_base64()
@@ -41,16 +42,18 @@ class KeyPair():
     def as_pycrypto(self):
         return RSA.importKey(self.private_key_str())
 
-    def encrypt(self, text):
-        text_bytes = text.encode('utf-8')
+    def encrypt(self, data, encoding='utf-8'):
+        if isinstance(data, str) and encoding:
+            data = data.encode(encoding)
         cipher = PKCS1_OAEP.new(self.as_pycrypto())
-        ciphertext = cipher.encrypt(text_bytes)
+        ciphertext = cipher.encrypt(data)
         return ciphertext
 
-    def decrypt(self, ciphertext):
+    def decrypt(self, ciphertext, encoding='utf-8'):
         cipher = PKCS1_OAEP.new(self.as_pycrypto())
-        text_bytes = cipher.decrypt(ciphertext)
-        text = text_bytes.decode('utf-8')
+        data = cipher.decrypt(ciphertext)
+        if encoding:
+            text = data.decode(encoding)
         return text
 
 class SecurityError(ValueError):
@@ -82,3 +85,40 @@ class PrivateFile():
 
     def __exit__(self, *args, **kwargs):
         self.handler.close()
+
+class RSAEncryptedFile():
+    def __init__(self, path, key, mode='rb', encoding='utf-8'):
+        self.path = path
+        self.mode = mode
+        self.key = key
+        self.encoding = encoding
+        
+        # Ensure we're working in binary here...
+        if 'b' not in self.mode:
+            self.mode += 'b'
+
+    def __enter__(self):
+        self.file_obj = open(self.path, self.mode)
+        return self
+
+    def __exit__(self, *args, **kwargs):
+        self.file_obj.close()
+
+    def read(self):
+        data = self.file_obj.read()
+        decrypted_data = self.key.decrypt(data, encoding=self.encoding)
+        return decrypted_data
+        
+    def write(self, content):
+        encrypted_data = self.key.encrypt(content, encoding=self.encoding)
+        result = self.file_obj.write(encrypted_data)
+        return result
+
+class EncryptedJsonFile(RSAEncryptedFile):
+    def read(self):
+        json_text = super(EncryptedJsonFile, self).read()
+        return json.loads(json_text)
+        
+    def write(self, obj):
+        json_text = json.dumps(obj)
+        return super(EncryptedJsonFile, self).write(json_text)
