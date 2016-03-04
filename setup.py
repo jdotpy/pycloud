@@ -9,7 +9,12 @@ setup(
     author='KJ',
     author_email='<redacted>',
     url='<TBD>',
-    packages=['pycloud'],
+    packages=[
+        'pycloud',
+        'pycloud.core',
+        'pycloud.minicloud',
+        'pycloud.web',
+    ],
     install_requires=[
         'paramiko',
         'requests',
