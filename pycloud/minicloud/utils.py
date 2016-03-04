@@ -5,6 +5,8 @@ import errno
 import yaml
 
 def new_cloud(path, name='My Cloud', key_path=None):
+    path = os.path.abspath(path)
+    print('New cloud creation at:', path)
     if path_exists(path):
         raise ValueError('Path Already Exists!')
     if not key_path:

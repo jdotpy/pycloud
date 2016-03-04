@@ -111,6 +111,7 @@ class CLIHandler():
         return vars(options)
 
     def init(self, path=None, name=None, key=None):
+        print('Creating new cloud at:', path)
         if path_exists(path):
             print('Path already exists')
             return False
