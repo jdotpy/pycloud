@@ -1,5 +1,5 @@
 from quickconfig import Configuration
-from .security import generate_secret_key, KeyPair
+from .security import generate_secret_key, KeyPair, AESEncryption
 from .net import SSHGroup
 import re
 
@@ -20,7 +20,7 @@ class Cloud():
     def _load_keys(self, key_source):
         keys = {}
         for key_name, key_data in key_source.items():
-            key = KeyPair(**key_data)
+            key = KeyPair(password=self.config.get('secret_key'), **key_data)
             keys[key_name] = key
         self.keys = keys
         self.key = keys.get('default', None)
@@ -72,6 +72,13 @@ class Cloud():
     @property
     def operations(self):
         return self._operations
+
+    def encrypt(self, message):
+        return AESEncrypt(self.config('secret_key')).encrypt(message, encode=True)
+
+    def decrypt(self, ciphertext):
+        return AESEncrypt(self.config('secret_key')).decrypt(ciphertext)
+
 
 class Host():
     def __init__(self, hostname, username=None, password=None, pkey=None, name=None, env=None, tags=None, cloud=None):

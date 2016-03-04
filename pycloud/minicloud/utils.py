@@ -1,41 +1,42 @@
 from .cloud import LocalCloud
-from ..core.security import generate_secret_key, KeyPair, PrivateFile, EncryptedJsonFile, make_private_dir
+from ..core.security import generate_secret_key, KeyPair, PrivateFile, EncryptedJsonFile, make_private_dir, AESEncryption
 import os
 import errno
 import yaml
 
 def new_cloud(path, name='My Cloud', key_path=None):
-    path = os.path.abspath(path)
-    print('New cloud creation at:', path)
     if path_exists(path):
         raise ValueError('Path Already Exists!')
-    if not key_path:
-        key = {'private_key': KeyPair().private_key_str()}
-    else:
-        key = {'private_key_path': key_path}
-    key_obj = KeyPair(**key)
 
-    datasource_path = path + '/data.json'
+    secret_key = AESEncryption.generate_key()
+    path = os.path.abspath(path)
+    make_private_dir(path)
+    config_file_path = os.path.join(path, 'config.yaml')
+    data_file_path = os.path.join(path, 'data.json')
+    default_key_path = os.path.join(path, LocalCloud.DEFAULT_KEY_NAME + '.key')
+
+    if key_path:
+        key_obj = KeyPair(private_key_path=key_path)
+    else:
+        key_obj = KeyPair()
+    key_obj.to_file(default_key_path, secret_key)
+
     config = {
         'name': name,
-        'datasource': datasource_path,
-        'secret_key': generate_secret_key(),
+        'datasource': data_file_path,
+        'secret_key': secret_key,
         'keys': {
-            LocalCloud.DEFAULT_KEY_NAME: key 
+            LocalCloud.DEFAULT_KEY_NAME: {'private_key_path': default_key_path}
         }
     }
-    create_project(path, config, key=key_obj)
-    cloud = LocalCloud(datasource_path, config=config)
+
+    with PrivateFile(config_file_path, 'w') as f:
+        f.write(yaml.dump(config))
+    with EncryptedJsonFile(data_file_path, secret_key, 'w', constructor=PrivateFile) as f:
+        f.write({})
+
+    cloud = LocalCloud(config=config)
     cloud._save()
 
 def path_exists(path):
     return os.path.exists(path)
-
-def create_project(path, config, key):
-    make_private_dir(path)
-    config_file_path = path + '/' + 'config.yaml' 
-    data_file_path = path + '/' + 'data.json'
-    with PrivateFile(config_file_path, 'w') as f:
-        f.write(yaml.dump(config))
-    with EncryptedJsonFile(data_file_path, key, 'w', constructor=PrivateFile) as f:
-        f.write({})

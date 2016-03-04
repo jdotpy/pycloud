@@ -19,6 +19,13 @@ class CLIHandler():
     ]
     COMMANDS = {
         # command name, function
+        'encrypt': {
+            'func': 'encrypt',
+            'cloud': False,
+            'args': {
+                'message': {}
+            }
+        },
         'info': {
             'func': 'info',
         },
@@ -85,12 +92,8 @@ class CLIHandler():
         else:
             sources = self.DEFAULT_CONFIG_SOURCES
         config = Configuration(*sources)
-        data_path = config.get('datasource')
-        if data_path is None:
-            raise ValueError('No valid configuration found!')
-        cloud = LocalCloud(data_path, config=config)
         try:
-            cloud = LocalCloud(data_path, config=config)
+            cloud = LocalCloud(config=config)
         except ValueError as e:
             cloud = None
             raise ValueError('Could not configure cloud: ' +  str(e))
@@ -160,6 +163,18 @@ class CLIHandler():
                 return False
         self.cloud._hosts.append(host)
         self.cloud._save()
+
+    def encrypt(self, message=None):
+        print('Encrypting:', message)
+        from pycloud.core.security import AESEncryption
+        aes1 = AESEncryption()
+        print('Using key:', aes1.get_key())
+        ciphertext = aes1.encrypt(message, encode=True)
+
+        print('ciphertext:', ciphertext)
+        aes2 = AESEncryption(aes1.get_key())
+        original = aes2.decrypt(ciphertext)
+        print('{} == {}? {}'.format(message, original, original==message))
 
 if __name__ == '__main__':
     CLIHandler().run_command(sys.argv[1:])

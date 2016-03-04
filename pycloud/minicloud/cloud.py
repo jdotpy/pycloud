@@ -3,12 +3,8 @@ from pycloud.core.cloud import Policy, Task, Operation, Environment, Host, Cloud
 from pycloud.core.security import EncryptedJsonFile 
 
 class LocalCloud(Cloud):
-    def __init__(self, path, **kwargs):
-        self._path = path
-        super(LocalCloud, self).__init__(**kwargs)
-
     def _load_datasource(self):
-        with EncryptedJsonFile(self._path, self.key, 'r') as f:
+        with EncryptedJsonFile(self.config.get('datasource'), self.config.get('secret_key'), 'r') as f:
             data = f.read()
         self._hosts = [self._load_host(host_data) for host_data in data.get('hosts', [])]
         self._envs = [self._load_env(env_data) for env_data in data.get('envs', [])]
@@ -17,7 +13,7 @@ class LocalCloud(Cloud):
         self._policies = [self._load_policy(policy_data) for policy_data in data.get('policies', [])]
 
     def __str__(self):
-        return '[LocalCloud loaded from {}]'.format(self._path) 
+        return '[LocalCloud loaded from {}]'.format(self.config.get('datasource')) 
 
     def _load_host(self, source):
         return Host(cloud=self, **source)
@@ -49,7 +45,7 @@ class LocalCloud(Cloud):
             'envs': [self._dump_env(env) for env in self.envs],
             'policies': [self._dump_policy(policy) for policy in self.policies],
         }
-        with EncryptedJsonFile(self._path, self.key, 'w') as f:
+        with EncryptedJsonFile(self.config.get('datasource'), self.config.get('secret_key'), 'w') as f:
             f.write(data)
 
     def add(self, obj):

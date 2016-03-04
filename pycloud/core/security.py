@@ -1,6 +1,9 @@
 from paramiko.rsakey import RSAKey
-from Crypto.Cipher import PKCS1_OAEP
+from Crypto.Cipher import PKCS1_OAEP, AES
 from Crypto.PublicKey import RSA
+from Crypto import Random
+
+import base64
 import json
 import stat
 import os
@@ -15,11 +18,11 @@ def generate_secret_key(length=128):
 class KeyPair():
     KEY_SIZE = 4096
 
-    def __init__(self, private_key=None, private_key_path=None):
+    def __init__(self, private_key=None, private_key_path=None, password=None):
         if private_key:
             self._key = RSAKey(file_obj=io.StringIO(private_key))
         elif private_key_path:
-            self._key = RSAKey(filename=private_key_path)
+            self._key = RSAKey(filename=private_key_path, password=password)
         else:
             self._key = RSAKey.generate(self.KEY_SIZE)
 
@@ -55,6 +58,55 @@ class KeyPair():
         if encoding:
             text = data.decode(encoding)
         return text
+
+    def to_file(self, path, password=None):
+        self._key.write_private_key_file(path, password=password)
+
+class DecryptionError(ValueError):
+    pass
+
+class AESEncryption():
+    DEFAULT_KEY_SIZE = 32
+
+    @classmethod
+    def generate_key(cls, key_size=None):
+        if key_size is None:
+            key_size = cls.DEFAULT_KEY_SIZE
+
+        key = Random.new().read(key_size)
+        return base64.b64encode(key).decode('utf-8')
+
+    def get_key(self):
+        return base64.b64encode(self.key).decode('utf-8')
+
+    def __init__(self, key=None, iv=None, encoding='utf-8'):
+        if key is None:
+            key = self.generate_key()
+        if isinstance(key, str):
+            key = base64.b64decode(key.encode('utf-8'))
+        if iv is None:
+            iv = Random.new().read(AES.block_size)
+        self.iv = iv
+        self.key = key
+        self.encoding = encoding
+        self.cipher = AES.new(self.key, AES.MODE_CFB, iv)
+
+    def encrypt(self, content, encode=False):
+        if self.encoding:
+            content.encode(self.encoding)
+        message = self.iv + self.cipher.encrypt(content)
+        if encode:
+            message = base64.b64encode(message).decode('utf-8')
+        return message
+
+    def decrypt(self, ciphertext):
+        if isinstance(ciphertext, str):
+            ciphertext = base64.b64decode(ciphertext.encode('utf-8'))
+        message = self.cipher.decrypt(ciphertext)
+        content = message[AES.block_size:]
+        if self.encoding:
+            content = content.decode(self.encoding)
+        return content
 
 class SecurityError(ValueError):
     pass
@@ -111,7 +163,7 @@ def make_private_dir(path):
     os.chmod(path, stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR)
     return True
 
-class RSAEncryptedFile():
+class AESEncryptedFile():
     def __init__(self, path, key, mode='rb', encoding='utf-8', constructor=open):
         self.path = path
         self.mode = mode
@@ -132,19 +184,18 @@ class RSAEncryptedFile():
 
     def read(self):
         data = self.file_obj.read()
-        decrypted_data = self.key.decrypt(data, encoding=self.encoding)
+        decrypted_data = AESEncryption(self.key, encoding=self.encoding).decrypt(data)
         return decrypted_data
         
     def write(self, content):
-        encrypted_data = self.key.encrypt(content, encoding=self.encoding)
+        encrypted_data = AESEncryption(self.key, encoding=self.encoding).encrypt(content)
         result = self.file_obj.write(encrypted_data)
         return result
 
     def close(self):
         self.file_obj.close()
 
-
-class EncryptedJsonFile(RSAEncryptedFile):
+class EncryptedJsonFile(AESEncryptedFile):
     def read(self):
         json_text = super(EncryptedJsonFile, self).read()
         return json.loads(json_text)
