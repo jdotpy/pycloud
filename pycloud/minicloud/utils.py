@@ -1,5 +1,5 @@
 from .cloud import LocalCloud
-from ..core.security import generate_secret_key, KeyPair, PrivateFile, EncryptedJsonFile
+from ..core.security import generate_secret_key, KeyPair, PrivateFile, EncryptedJsonFile, make_private_dir
 import os
 import errno
 import yaml
@@ -32,16 +32,10 @@ def path_exists(path):
     return os.path.exists(path)
 
 def create_project(path, config, key):
-    try:
-        os.makedirs(path)
-    except OSError as exc:
-        if exc.errno == errno.EEXIST and os.path.isdir(path):
-            pass
-        else:
-            raise
+    make_private_dir(path)
     config_file_path = path + '/' + 'config.yaml' 
     data_file_path = path + '/' + 'data.json'
     with PrivateFile(config_file_path, 'w') as f:
         f.write(yaml.dump(config))
-    with EncryptedJsonFile(data_file_path, key, 'w') as f:
+    with EncryptedJsonFile(data_file_path, key, 'w', constructor=PrivateFile) as f:
         f.write({})

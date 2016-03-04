@@ -66,6 +66,7 @@ class PrivateFile():
     def __init__(self, path, mode):
         self.path = path
         self.mode = mode
+        self.handler = None
 
     def __enter__(self):
         try:
@@ -83,26 +84,51 @@ class PrivateFile():
             self.handler = open(self.path, self.mode)
             return self.handler
 
-    def __exit__(self, *args, **kwargs):
+    def read(self):
+        if not self.handler:
+            self.__enter__()
+        return self.handler.read()
+
+    def write(self, content):
+        if not self.handler:
+            self.__enter__()
+        return self.handler.write(content)
+
+    def close(self):
         self.handler.close()
 
+    def __exit__(self, *args, **kwargs):
+        self.close()
+
+def make_private_dir(path):
+    try:
+        os.mkdir(path)
+    except OSError as exc:
+        if exc.errno == errno.EEXIST and os.path.isdir(path):
+            pass
+        else:
+            raise
+    os.chmod(path, stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR)
+    return True
+
 class RSAEncryptedFile():
-    def __init__(self, path, key, mode='rb', encoding='utf-8'):
+    def __init__(self, path, key, mode='rb', encoding='utf-8', constructor=open):
         self.path = path
         self.mode = mode
         self.key = key
         self.encoding = encoding
+        self.constructor = constructor
         
         # Ensure we're working in binary here...
         if 'b' not in self.mode:
             self.mode += 'b'
 
     def __enter__(self):
-        self.file_obj = open(self.path, self.mode)
+        self.file_obj = self.constructor(self.path, self.mode)
         return self
 
     def __exit__(self, *args, **kwargs):
-        self.file_obj.close()
+        self.close()
 
     def read(self):
         data = self.file_obj.read()
@@ -113,6 +139,10 @@ class RSAEncryptedFile():
         encrypted_data = self.key.encrypt(content, encoding=self.encoding)
         result = self.file_obj.write(encrypted_data)
         return result
+
+    def close(self):
+        self.file_obj.close()
+
 
 class EncryptedJsonFile(RSAEncryptedFile):
     def read(self):
