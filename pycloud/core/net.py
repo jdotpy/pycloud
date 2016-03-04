@@ -60,6 +60,7 @@ class SSHGroupResult():
                 if show_stderr and stderr:
                     for line in stderr.splitlines():
                         output.append('{}<<err>>: {}'.format(host, line))
+        for host, result in self.results.items():
             if not result.executed or show_summary:
                 output.append('{}: {}'.format(host, result))
         return '\n'.join(output)

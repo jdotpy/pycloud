@@ -109,7 +109,6 @@ class Host():
 
     def __str__(self):
         return '[{}] {}'.format(self.env, self.name)
-
         
 class Operation():
     pass
