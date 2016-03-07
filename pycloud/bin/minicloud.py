@@ -38,6 +38,15 @@ class CLIHandler():
                 ('-n', '--name'): {'help': 'Name of cloud'}
             }
         },
+        'shell': {
+            'func': 'shell',
+            'args': {
+                ('-n','--name'): {},
+                ('-e','--env'): {},
+                ('-t','--tags'): {'nargs': '*'},
+                ('--summary'): {'action': 'store_true', 'default': False}
+            }
+        },
         'ssh': {
             'func': 'ssh',
             'args': {
@@ -82,6 +91,8 @@ class CLIHandler():
         command = self.COMMANDS[command_name]
         if self.cloud is None and command.get('cloud', True):
             self.cloud = self._setup_cloud(options.pop('config'))
+            if self.cloud is None:
+                raise ValueError('Could not run command without cloud. Aborting.')
     
         func = getattr(self, command['func'])
         func(**options)
@@ -92,6 +103,9 @@ class CLIHandler():
         else:
             sources = self.DEFAULT_CONFIG_SOURCES
         config = Configuration(*sources)
+        if config.loaded == 0:
+            print('No config files found. Looked in these locations:', sources)
+            return None
         try:
             cloud = LocalCloud(config=config)
         except ValueError as e:
@@ -134,6 +148,10 @@ class CLIHandler():
         if not hosts:
             print('No hosts found!')
             return False
+        else:
+            print('Found these hosts:')
+            for host in hosts:
+                print('\t', host)
 
         group = SSHGroup(hosts, max_pool_size=10)
         results = group.run_command(ssh_command)
@@ -141,6 +159,31 @@ class CLIHandler():
         show_stdout = True
         show_stderr = not summary
         print(results.display(show_stderr=show_stderr, show_stdout=show_stdout))
+
+    def shell(self, name=None, tags=None, env=None, summary=False):
+        hosts = self.cloud.query({'name': name, 'tags': tags, 'env': env})
+        if not hosts:
+            print('No hosts found!')
+            return False
+        else:
+            print('Found these hosts:')
+            for host in hosts:
+                print('\t', host)
+
+        group = SSHGroup(hosts, max_pool_size=10)
+        show_stdout = True
+        show_stderr = True
+        while True:
+            try:
+                cmd = input("[cloud]$ ")
+            except KeyboardInterrupt:
+                break
+            if not cmd:
+                continue
+            if cmd == 'exit':
+                break
+            results = group.run_command(cmd)
+            print(results.display(show_summary=False, show_stdout=show_stdout, show_stderr=show_stderr))
 
     def register(self, hostname=None, name=None, tags=None, env='default', user=None, password=None, ask_for_pass=False):
         """ Register a new host """
