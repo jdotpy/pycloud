@@ -79,6 +79,9 @@ class Cloud():
     def decrypt(self, ciphertext):
         return AESEncrypt(self.config('secret_key')).decrypt(ciphertext)
 
+    def enforce_policy(self, policy, hosts):
+        group = SSHGroup(hosts)
+        return 'Done'
 
 class Host():
     def __init__(self, hostname, username=None, password=None, pkey=None, name=None, env=None, tags=None, cloud=None):

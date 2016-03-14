@@ -74,35 +74,43 @@ class SSHGroupResult():
 class SSHSession(threading.Thread):
     HOST_KEY_POLICY = paramiko.AutoAddPolicy()
     MAX_RECV_BYTES = 1000000
+    CYCLE_WAIT_TIME = .1
     ENCODING = 'utf-8'
     
-    def __init__(self, host, commands=None, cloud=None, stream=None):
+    def __init__(self, host, handler):
         self.host = host
-        self.commands = commands
+        self.handler = handler
         self.client = paramiko.SSHClient()
         self.client.set_missing_host_key_policy(self.HOST_KEY_POLICY)
-        self.stream = stream
-        self.output = []
-        self.cloud = cloud
         super(SSHSession, self).__init__()
 
     def run(self):
         try:
             self.client.connect(
-                self.host.name, 
+                self.host.hostname, 
                 **self.host.credentials()
             )
         except (OSError, paramiko.ssh_exception.SSHException) as e:
             self.result = SSHResult(executed=False, error=SSHError(str(e)))
-            return False
+            return self.result
         except paramiko.ssh_exception.AuthenticationException as e:
             self.result = SSHResult(executed=False, error=AuthError())
-            return False
+            return self.result
         except Exception as e:
             self.result = SSHResult(executed=False, error=e)
-            return False
+            return self.result
             
-        for cmd in self.commands:
+        shell = self.handler.shell()
+        output = self.handler.output
+        cmd = None
+        cmd_result = None
+        while True:
+            if cmd_result:
+                output.append(cmd_result)
+            try:
+                cmd = shell.send(cmd_result)
+            except StopIteration:
+                break
             channel = self.client.get_transport().open_session()
             stdout = b''
             stderr = b''
@@ -117,26 +125,65 @@ class SSHSession(threading.Thread):
                     stdout += channel.recv(self.MAX_RECV_BYTES)
                 if exit_status is not None:
                     break
-                time.sleep(.1)
-            self.output.append(
-                (exit_status, stdout.decode('utf-8'), stderr.decode('utf-8'))
+                time.sleep(self.CYCLE_WAIT_TIME)
+            cmd_result = (
+                exit_status, 
+                stdout.decode(self.ENCODING),
+                stderr.decode(self.ENCODING)
             )
-        self.result = SSHResult(executed=True, output=self.output)
+        self.result = SSHResult(executed=True, output=output)
         self.client.close()
-        return True, self.output
+        return self.result
+
+class BaseShellHandler():
+    def __init__(self, commands, stop_on_error=True):
+        self.commands = commands
+        self.stop_on_error = stop_on_error
+        self.output = []
+        self.errored = False
+
+    def shell(self):
+        for command in self.commands:
+            result = yield command
+            exit_code, stdout, stderr = result
+            if self.stop_on_error and exit_code != 0:
+                break
+
+class SimpleShellHandler(BaseShellHandler):
+    def __init__(self, commands, stop_on_error=True):
+        self.commands = commands
+        self.stop_on_error = stop_on_error
+        self.output = []
+        self.errored = False
+        self.i = 0
+
+    def get_next_command(self):
+        if self.errored and self.stop_on_error:
+            return None
+        elif self.i < len(self.commands):
+            command = self.commands[self.i]
+            self.i += 1
+            return command
+        else:
+            return None
 
 class SSHGroup():
+    CYCLE_WAIT_TIME = .1
+
     def __init__(self, hosts, max_pool_size=10):
         self.hosts = hosts
         self.pool_size = min(len(self.hosts), max_pool_size)
 
-    def run_command(self, command):
-        return self.run_commands([command])
+    def run_command(self, command, stop_on_error=True):
+        return self.run_commands([command], stop_on_error=stop_on_error)
 
-    def run_commands(self, commands):
-        return self._exec_pool(commands)
+    def run_commands(self, commands, stop_on_error=True):
+        return self.run_handler(SimpleShellHandler, commands, stop_on_error=stop_on_error)
 
-    def _exec_pool(self, commands):
+    def run_handler(self, Handler, *args, **kwargs):
+        return self._exec_pool(Handler, args, kwargs)
+
+    def _exec_pool(self, Handler, handler_args, handler_kwargs):
         queue = set(self.hosts)
         threads = set() 
         all_complete = set()
@@ -157,8 +204,9 @@ class SSHGroup():
             if len(queue) > 0:
                 to_make = self.pool_size - len(threads)
                 for i in range(to_make):
-                    new_thread = SSHSession(queue.pop(), commands=commands)
+                    host = queue.pop()
+                    new_thread = SSHSession(host, Handler(*handler_args, **handler_kwargs))
                     threads.add(new_thread)
                     new_thread.start()
-            time.sleep(.2)
+            time.sleep(self.CYCLE_WAIT_TIME)
         return results

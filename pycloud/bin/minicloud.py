@@ -47,6 +47,16 @@ class CLIHandler():
                 ('--summary'): {'action': 'store_true', 'default': False}
             }
         },
+        'enforce': {
+            'func': 'enforce',
+            'args': {
+                'policy': {'help': 'Policy name'},
+                ('-n','--name'): {},
+                ('-e','--env'): {},
+                ('-t','--tags'): {'nargs': '*'},
+                ('--summary'): {'action': 'store_true', 'default': False}
+            }
+        },
         'ssh': {
             'func': 'ssh',
             'args': {
@@ -154,7 +164,8 @@ class CLIHandler():
                 print('\t', host)
 
         group = SSHGroup(hosts, max_pool_size=10)
-        results = group.run_command(ssh_command)
+        ssh_commands = ssh_command.split(';')
+        results = group.run_commands(ssh_commands)
 
         show_stdout = True
         show_stderr = not summary
@@ -185,6 +196,19 @@ class CLIHandler():
             results = group.run_command(cmd)
             print(results.display(show_summary=False, show_stdout=show_stdout, show_stderr=show_stderr))
 
+    def enforce(self, policy=None, name=None, tags=None, env=None, summary=False):
+        hosts = self.cloud.query({'name': name, 'tags': tags, 'env': env})
+        if not hosts:
+            print('No hosts found!')
+            return False
+        else:
+            print('Found these hosts:')
+            for host in hosts:
+                print('\t', host)
+
+        results = self.cloud.enforce_policy(policy, hosts)
+        print(results)
+
     def register(self, hostname=None, name=None, tags=None, env='default', user=None, password=None, ask_for_pass=False):
         """ Register a new host """
         if ask_for_pass:
@@ -196,7 +220,6 @@ class CLIHandler():
         ))
         host = Host(hostname, name=name, username=user, password=password, env=env, cloud=self.cloud)
         results = host.ping()
-        print(results)
         if results.success():
             print('Connection test successful. Saving host.')
             add = True
