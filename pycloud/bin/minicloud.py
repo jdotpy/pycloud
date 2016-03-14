@@ -6,6 +6,7 @@ from pycloud.minicloud.cloud import LocalCloud
 from pycloud.core.cloud import Host
 from pycloud.core.net import SSHGroup
 from pycloud.core.security import *
+from pycloud.core import policies
 import argparse
 import getpass
 import shlex
@@ -55,6 +56,33 @@ class CLIHandler():
                 ('-e','--env'): {},
                 ('-t','--tags'): {'nargs': '*'},
                 ('--summary'): {'action': 'store_true', 'default': False}
+            }
+        },
+        'task': {
+            'func': 'task',
+            'args': {
+                'task': {'help': 'Task name'},
+                ('-n','--name'): {},
+                ('-e','--env'): {},
+                ('-t','--tags'): {'nargs': '*'},
+            }
+        },
+        'operation': {
+            'func': 'operation',
+            'args': {
+                'operation': {'help': 'Operation name'},
+                ('-n','--name'): {},
+                ('-e','--env'): {},
+                ('-t','--tags'): {'nargs': '*'},
+            }
+        },
+        'operation': {
+            'func': 'task',
+            'args': {
+                'task': {'help': 'Task name'},
+                ('-n','--name'): {},
+                ('-e','--env'): {},
+                ('-t','--tags'): {'nargs': '*'},
             }
         },
         'ssh': {
@@ -206,8 +234,9 @@ class CLIHandler():
             for host in hosts:
                 print('\t', host)
 
+        policy = policies.Dir(options={'path': '/tmp/my-policy-dir'})
         results = self.cloud.enforce_policy(policy, hosts)
-        print(results)
+        print(results.display(show_stderr=True))
 
     def register(self, hostname=None, name=None, tags=None, env='default', user=None, password=None, ask_for_pass=False):
         """ Register a new host """
@@ -241,6 +270,12 @@ class CLIHandler():
         aes2 = AESEncryption(aes1.get_key())
         original = aes2.decrypt(ciphertext)
         print('{} == {}? {}'.format(message, original, original==message))
+
+    def task(self, task=None, name=None, tags=None, env=None, summary=False):
+        pass
+
+    def operation(self, operation=None, name=None, tags=None, env=None, summary=False):
+        pass
 
 if __name__ == '__main__':
     CLIHandler().run_command(sys.argv[1:])

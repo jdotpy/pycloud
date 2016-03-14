@@ -1,6 +1,7 @@
 from quickconfig import Configuration
 from .security import generate_secret_key, KeyPair, AESEncryption
 from .net import SSHGroup
+from . import policies
 import re
 
 class Cloud():
@@ -81,7 +82,8 @@ class Cloud():
 
     def enforce_policy(self, policy, hosts):
         group = SSHGroup(hosts)
-        return 'Done'
+        results = group.run_handler(policy.shell_handler(), policy)
+        return results
 
 class Host():
     def __init__(self, hostname, username=None, password=None, pkey=None, name=None, env=None, tags=None, cloud=None):
@@ -127,9 +129,6 @@ class Task():
     pass
 
 class HostQuery():
-    pass
-
-class Policy():
     pass
 
 class Environment():

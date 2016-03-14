@@ -82,6 +82,7 @@ class SSHSession(threading.Thread):
         self.handler = handler
         self.client = paramiko.SSHClient()
         self.client.set_missing_host_key_policy(self.HOST_KEY_POLICY)
+        self.output = []
         super(SSHSession, self).__init__()
 
     def run(self):
@@ -100,72 +101,47 @@ class SSHSession(threading.Thread):
             self.result = SSHResult(executed=False, error=e)
             return self.result
             
-        shell = self.handler.shell()
-        output = self.handler.output
-        cmd = None
-        cmd_result = None
-        while True:
-            if cmd_result:
-                output.append(cmd_result)
-            try:
-                cmd = shell.send(cmd_result)
-            except StopIteration:
-                break
-            channel = self.client.get_transport().open_session()
-            stdout = b''
-            stderr = b''
-            channel.exec_command(cmd)
-            exit_status = None
-            while True:
-                if channel.exit_status_ready():
-                    exit_status = channel.recv_exit_status()
-                if channel.recv_stderr_ready():
-                    stderr += channel.recv_stderr(self.MAX_RECV_BYTES)
-                if channel.recv_ready():
-                    stdout += channel.recv(self.MAX_RECV_BYTES)
-                if exit_status is not None:
-                    break
-                time.sleep(self.CYCLE_WAIT_TIME)
-            cmd_result = (
-                exit_status, 
-                stdout.decode(self.ENCODING),
-                stderr.decode(self.ENCODING)
-            )
-        self.result = SSHResult(executed=True, output=output)
+        self.handler.shell(self)
+        self.result = SSHResult(executed=True, output=self.output)
         self.client.close()
         return self.result
+
+    def execute(self, cmd):
+        channel = self.client.get_transport().open_session()
+        stdout = b''
+        stderr = b''
+        channel.exec_command(cmd)
+        exit_status = None
+        while True:
+            if channel.exit_status_ready():
+                exit_status = channel.recv_exit_status()
+            if channel.recv_stderr_ready():
+                stderr += channel.recv_stderr(self.MAX_RECV_BYTES)
+            if channel.recv_ready():
+                stdout += channel.recv(self.MAX_RECV_BYTES)
+            if exit_status is not None:
+                break
+            time.sleep(self.CYCLE_WAIT_TIME)
+        cmd_result = (
+            exit_status, 
+            stdout.decode(self.ENCODING),
+            stderr.decode(self.ENCODING)
+        )
+        self.output.append(cmd_result)
+        return cmd_result
 
 class BaseShellHandler():
     def __init__(self, commands, stop_on_error=True):
         self.commands = commands
         self.stop_on_error = stop_on_error
-        self.output = []
         self.errored = False
 
-    def shell(self):
+    def shell(self, client):
         for command in self.commands:
-            result = yield command
+            result = client.execute(command)
             exit_code, stdout, stderr = result
             if self.stop_on_error and exit_code != 0:
                 break
-
-class SimpleShellHandler(BaseShellHandler):
-    def __init__(self, commands, stop_on_error=True):
-        self.commands = commands
-        self.stop_on_error = stop_on_error
-        self.output = []
-        self.errored = False
-        self.i = 0
-
-    def get_next_command(self):
-        if self.errored and self.stop_on_error:
-            return None
-        elif self.i < len(self.commands):
-            command = self.commands[self.i]
-            self.i += 1
-            return command
-        else:
-            return None
 
 class SSHGroup():
     CYCLE_WAIT_TIME = .1
@@ -178,7 +154,7 @@ class SSHGroup():
         return self.run_commands([command], stop_on_error=stop_on_error)
 
     def run_commands(self, commands, stop_on_error=True):
-        return self.run_handler(SimpleShellHandler, commands, stop_on_error=stop_on_error)
+        return self.run_handler(BaseShellHandler, commands, stop_on_error=stop_on_error)
 
     def run_handler(self, Handler, *args, **kwargs):
         return self._exec_pool(Handler, args, kwargs)
