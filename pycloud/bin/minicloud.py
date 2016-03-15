@@ -4,6 +4,7 @@ from quickconfig import Configuration
 from pycloud.minicloud.utils import new_cloud, path_exists
 from pycloud.minicloud.cloud import LocalCloud
 from pycloud.core.cloud import Host
+from pycloud.core.utils import dumb_argparse
 from pycloud.core.net import SSHGroup
 from pycloud.core.security import *
 from pycloud.core import policies
@@ -23,9 +24,9 @@ class CLIHandler():
         'encrypt': {
             'func': 'encrypt',
             'cloud': False,
-            'args': {
-                'message': {}
-            }
+            'args': [
+                'message'
+            ]
         },
         'info': {
             'func': 'info',
@@ -33,80 +34,87 @@ class CLIHandler():
         'init': {
             'func': 'init',
             'cloud': False,
-            'args': {
-                'path': {'help': 'Path to new cloud dir'},
-                ('-k', '--key'): {'help': 'Path to key to use as default'},
-                ('-n', '--name'): {'help': 'Name of cloud'}
-            }
+            'args': [
+                ('path', {'help': 'Path to new cloud dir'}),
+                (('-k', '--key'), {'help': 'Path to key to use as default'}),
+                (('-n', '--name'), {'help': 'Name of cloud'})
+            ]
         },
         'shell': {
             'func': 'shell',
-            'args': {
-                ('-n','--name'): {},
-                ('-e','--env'): {},
-                ('-t','--tags'): {'nargs': '*'},
-                ('--summary'): {'action': 'store_true', 'default': False}
-            }
+            'args': [
+                (('-n','--name'), {}),
+                (('-e','--env'), {}),
+                (('-t','--tags'), {'nargs': '*'}),
+                (('--summary'), {'action': 'store_true', 'default': False})
+            ]
         },
         'enforce': {
             'func': 'enforce',
-            'args': {
-                'policy': {'help': 'Policy name'},
-                ('-n','--name'): {},
-                ('-e','--env'): {},
-                ('-t','--tags'): {'nargs': '*'},
-                ('--summary'): {'action': 'store_true', 'default': False}
-            }
+            'args': [
+                ('policy', {'help': 'Policy name'}),
+                (('-n','--name'), {}),
+                (('-e','--env'), {}),
+                (('-t','--tags'), {'nargs': '*'}),
+                ('--summary', {'action': 'store_true', 'default': False})
+            ]
+        },
+        'create_task': {
+            'func': 'create_task',
+            'extra': True,
+            'args': [
+                ('task_type', {'help': 'Task type'}),
+                ('task_name', {'help': 'Task name'}),
+            ]
         },
         'task': {
             'func': 'task',
-            'args': {
-                'task': {'help': 'Task name'},
-                ('-n','--name'): {},
-                ('-e','--env'): {},
-                ('-t','--tags'): {'nargs': '*'},
-            }
+            'args': [
+                ('task', {'help': 'Task name'}),
+                (('-n','--name'), {}),
+                (('-e','--env'), {}),
+                (('-t','--tags'), {'nargs': '*'}),
+            ]
         },
         'operation': {
             'func': 'operation',
-            'args': {
-                'operation': {'help': 'Operation name'},
-                ('-n','--name'): {},
-                ('-e','--env'): {},
-                ('-t','--tags'): {'nargs': '*'},
-            }
+            'args': [
+                ('operation', {'help': 'Operation name'}),
+                (('-n','--name'), {}),
+                (('-e','--env'), {}),
+                (('-t','--tags'), {'nargs': '*'}),
+            ]
         },
         'operation': {
             'func': 'task',
-            'args': {
-                'task': {'help': 'Task name'},
-                ('-n','--name'): {},
-                ('-e','--env'): {},
-                ('-t','--tags'): {'nargs': '*'},
-            }
+            'args': [
+                ('task', {'help': 'Task name'}),
+                (('-n','--name'), {}),
+                (('-e','--env'), {}),
+                (('-t','--tags'), {'nargs': '*'}),
+            ]
         },
         'ssh': {
             'func': 'ssh',
-            'args': {
-                'ssh_command': {'help': 'Command to run'},
-                ('-n','--name'): {},
-                ('-e','--env'): {},
-                ('-t','--tags'): {'nargs': '*'},
-                ('--summary'): {'action': 'store_true', 'default': False}
-            }
+            'args': [
+                ('ssh_command', {'help': 'Command to run'}),
+                (('-n','--name'), {}),
+                (('-e','--env'), {}),
+                (('-t','--tags'), {'nargs': '*'}),
+                (('--summary'), {'action': 'store_true', 'default': False})
+            ]
         },
         'register': {
             'func': 'register',
-            'args': {
-                'hostname': {},
-                ('-n','--name'): {},
-                ('-e','--env'): {},
-                ('-e','--env'): {},
-                ('-t','--tags'): {'nargs': '*'},
-                ('-u','--user'): {},
-                ('-p','--password'): {},
-                ('-P','--ask-for-pass'): {'dest': 'ask_for_pass', 'action': 'store_true', 'default': False},
-            }
+            'args': [
+                ('hostname', {}),
+                (('-n','--name'), {}),
+                (('-e','--env'), {}),
+                (('-t','--tags'), {'nargs': '*'}),
+                (('-u','--user'), {}),
+                (('-p','--password'), {}),
+                (('-P','--ask-for-pass'), {'dest': 'ask_for_pass', 'action': 'store_true', 'default': False}),
+            ]
         },
         'hosts': {
             'func': 'hosts',
@@ -154,16 +162,33 @@ class CLIHandler():
     def _parse_args(self, args):
         root_parser = argparse.ArgumentParser(description='Mini cloud!')
         subparsers = root_parser.add_subparsers(dest='command')
+        only_known = False
         for cmd_name, cmd_info in self.COMMANDS.items():
             cmd_parser = subparsers.add_parser(cmd_name)
             if cmd_info.get('cloud', True):
                 cmd_parser.add_argument('--config', default=None)
-            for cmd_args, cmd_options in cmd_info.get('args', {}).items():
+            if cmd_info.get('extras', False):
+                only_known = False
+            for arg_info in cmd_info.get('args', []):
+                if isinstance(arg_info, str):
+                    cmd_args = [arg_info]
+                    cmd_options = {}
+                else:
+                    cmd_args, cmd_options = arg_info
                 if isinstance(cmd_args, str):
                     cmd_args = [cmd_args]
                 cmd_parser.add_argument(*cmd_args, **cmd_options)
-        options = root_parser.parse_args(args)
-        return vars(options)
+
+        extra = None 
+        if only_known:
+            options = root_parser.parse_args(args)
+        else:
+            options, extra = root_parser.parse_known_args(args)
+            extra = dumb_argparse(extra)
+        result = vars(options)
+        if extra:
+            result['options'] = extra
+        return result
 
     def init(self, path=None, name=None, key=None):
         print('Creating new cloud at:', path)
@@ -256,7 +281,7 @@ class CLIHandler():
             add_anyway = input('Connection test failed. Save host anyway? (y/n): ')
             if add_anyway != 'y':
                 return False
-        self.cloud._hosts.append(host)
+        self.cloud._hosts[host.name] = host
         self.cloud._save()
 
     def encrypt(self, message=None):
@@ -272,10 +297,35 @@ class CLIHandler():
         print('{} == {}? {}'.format(message, original, original==message))
 
     def task(self, task=None, name=None, tags=None, env=None, summary=False):
-        pass
+        hosts = self.cloud.query({'name': name, 'tags': tags, 'env': env})
+        if not hosts:
+            print('No hosts found!')
+            return False
+        else:
+            print('Found these hosts:')
+            for host in hosts:
+                print('\t', host)
 
-    def operation(self, operation=None, name=None, tags=None, env=None, summary=False):
-        pass
+        task = self.cloud.get_task(task)
+        if task is None:
+            print('No task with that name found')
+            return False
+        task.run(hosts)
+
+    def create_task(self, task_type=None, task_name=None, options=None):
+        print('Tasks:', self.cloud._tasks)
+        print('tt:', task_type, 'tn:', task_name, 'opts:', options)
+        cls = self.cloud._task_types.get(task_type)
+        task = cls(**options)
+        self.cloud._tasks[task_name] = task
+        self.cloud._save()
+        
+    def operation(self, operation=None):
+        op = self.cloud.get_operation(operation)
+        if op is None:
+            print('No task with that name found')
+            return False
+        op.run()
 
 if __name__ == '__main__':
     CLIHandler().run_command(sys.argv[1:])

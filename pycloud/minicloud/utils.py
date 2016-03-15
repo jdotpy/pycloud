@@ -25,6 +25,7 @@ def new_cloud(path, name='My Cloud', key_path=None):
         'name': name,
         'datasource': data_file_path,
         'secret_key': secret_key,
+        'modules': ['pycloud.base.CoreModule'],
         'keys': {
             LocalCloud.DEFAULT_KEY_NAME: {'private_key_path': default_key_path}
         }

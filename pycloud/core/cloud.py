@@ -2,6 +2,7 @@ from quickconfig import Configuration
 from .security import generate_secret_key, KeyPair, AESEncryption
 from .net import SSHGroup
 from . import policies
+from .utils import import_obj
 import re
 
 class Cloud():
@@ -17,6 +18,7 @@ class Cloud():
 
         self._load_keys(config.get('keys', {}))
         self._load_datasource(**kwargs)
+        self._load_modules(config.get('modules', []))
 
     def _load_keys(self, key_source):
         keys = {}
@@ -28,11 +30,31 @@ class Cloud():
 
     def _load_datasource(self, **data):
         # Datasource
-        self._hosts = data.pop('hosts', [])
-        self._envs = data.pop('envs', [])
-        self._operations = data.pop('operations', [])
-        self._tasks = data.pop('tasks', [])
-        self._policies = data.pop('policies', [])
+        self._hosts = data.pop('hosts', {})
+        self._envs = data.pop('envs', {})
+        self._operations = data.pop('operations', {})
+        self._tasks = data.pop('tasks', {})
+        self._policies = data.pop('policies', {})
+
+    def _load_modules(self, paths):
+        self._policy_types = {}
+        self._task_types = {}
+        self._operation_types = {}
+
+        self.modules = []
+        for path in paths:
+            try:
+                Module = import_obj(path)
+            except ImportError as e:
+                print('Error loading module:', e)
+                continue
+            module = Module()
+            self.modules.append(module)
+
+            # Module Triggers
+            self._policy_types.update(module.get_policy_types())
+            self._operation_types.update(module.get_operation_types())
+            self._task_types.update(module.get_task_types())
 
     def query(self, filters, single=False):
         matches = []
@@ -56,23 +78,38 @@ class Cloud():
 
     @property
     def hosts(self):
-        return self._hosts
+        return self._hosts.values()
+
+    def get_host(self, name):
+        return self._hosts.get(name)
 
     @property
     def tasks(self):
-        return self._tasks
+        return self._tasks.values()
+
+    def get_task(self, name):
+        return self._tasks.get(name)
 
     @property
     def envs(self):
-        return self._envs
+        return self._envs.values()
+
+    def get_env(self, name):
+        return self._envs.get(name)
 
     @property
     def policies(self):
-        return self._policies
+        return self._policies.values()
+
+    def get_policy(self, name):
+        return self._policies.get(name)
 
     @property
     def operations(self):
         return self._operations
+
+    def get_operation(self, name):
+        return self._operations.get(name)
 
     def encrypt(self, message):
         return AESEncrypt(self.config('secret_key')).encrypt(message, encode=True)
@@ -122,11 +159,41 @@ class Host():
     def __str__(self):
         return '[{}] {}'.format(self.env, self.name)
         
-class Operation():
-    pass
+class BaseOperation():
+    hosts = []
+    tasks = []
 
-class Task():
-    pass
+    def get_hosts(self):
+        return self.hosts    
+
+    def get_tasks(self):
+        return self.tasks
+
+    def run(self):
+        for task in self.get_tasks():
+            task.run(self.get_hosts(task))
+
+class TaskShellHandler():
+    def __init__(self, task):
+        self.task = task
+
+    def shell(self, client):
+        self.task.shell(client)
+
+class BaseTask():
+    required_options = []
+
+    def __init__(self, **options):
+        self.options = options
+
+        for option in self.required_options:
+            if option not in self.options:
+                raise ValueError(str(self) + ' requires option: ' + option)
+
+
+    def run(self, hosts):
+        group = SSHGroup(hosts)
+        return group.run_handler(TaskShellHandler, self)
 
 class HostQuery():
     pass
