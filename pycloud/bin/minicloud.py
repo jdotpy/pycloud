@@ -85,15 +85,6 @@ class CLIHandler():
                 (('-t','--tags'), {'nargs': '*'}),
             ]
         },
-        'operation': {
-            'func': 'task',
-            'args': [
-                ('task', {'help': 'Task name'}),
-                (('-n','--name'), {}),
-                (('-e','--env'), {}),
-                (('-t','--tags'), {'nargs': '*'}),
-            ]
-        },
         'ssh': {
             'func': 'ssh',
             'args': [
@@ -310,22 +301,18 @@ class CLIHandler():
         if task is None:
             print('No task with that name found')
             return False
-        task.run(hosts)
+        results = task.run(hosts)
+        print(results)
 
     def create_task(self, task_type=None, task_name=None, options=None):
-        print('Tasks:', self.cloud._tasks)
-        print('tt:', task_type, 'tn:', task_name, 'opts:', options)
         cls = self.cloud._task_types.get(task_type)
-        task = cls(**options)
+        task = cls(task_name, **options)
         self.cloud._tasks[task_name] = task
         self.cloud._save()
-        
-    def operation(self, operation=None):
-        op = self.cloud.get_operation(operation)
-        if op is None:
-            print('No task with that name found')
-            return False
-        op.run()
+        print('Created')
+
+    def operation(self, operation=None, **kwargs):
+        raise NotImplemented()
 
 if __name__ == '__main__':
     CLIHandler().run_command(sys.argv[1:])

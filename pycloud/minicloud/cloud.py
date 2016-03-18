@@ -22,20 +22,33 @@ class LocalCloud(Cloud):
     def _load_operation(self, source):
         return source
     def _load_task(self, source):
-        return source
+        print('Loading task:', source)
+        type_name = source.pop('type', None)
+        cls = self._task_types.get(type_name)
+        if cls is None:
+            return None
+        return cls(**source)
     def _load_policy(self, source):
         return source
 
     def _dump_host(self, source):
-        return {key: getattr(source, key) for key in ('hostname', 'name', 'tags', 'env', 'username', 'password')}
+        data = {key: getattr(source, key) for key in ('hostname', 'name', 'tags', 'env', 'username', 'password')}
+        return data
     def _dump_env(self, source):
-        return {key: getattr(source, key) for key in ()}
+        data = {key: getattr(source, key) for key in ()}
+        return data
     def _dump_operation(self, source):
-        return {key: getattr(source, key) for key in ()}
+        data = {key: getattr(source, key) for key in ()}
+        data['type'] = source.get_type_name()
+        return data
     def _dump_task(self, source):
-        return {key: getattr(source, key) for key in ('options',)}
+        data = {key: getattr(source, key) for key in ('options','name')}
+        data['type'] = source.get_type_name()
+        return data
     def _dump_policy(self, source):
-        return {key: getattr(source, key) for key in ()}
+        data = {key: getattr(source, key) for key in ()}
+        data['type'] = source.get_type_name()
+        return data
 
     def _save(self):
         data = {

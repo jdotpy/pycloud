@@ -1,8 +1,6 @@
 from ..core.cloud import BaseTask
 
 class BashTask(BaseTask):
-    command = 'echo "Hello World"'
-
     required_options = ('command', )
 
     def shell(self, client):

@@ -1,10 +1,9 @@
+from ..core.cloud import BaseOperation
 
-class SimpleOperation():
-    def __init__(self, tasks, hosts):
-        self.hosts = hosts
-        self.tasks = tasks
+class SimpleOperation(BaseOperation):
+    required_options = ('hosts', 'tasks')
 
     def run(self):
-        for task in tasks:
-            task.run(hosts)
+        for task in self.options['tasks']:
+            task.run(self.options['hosts'])
 

@@ -17,8 +17,8 @@ class Cloud():
         self.config = config
 
         self._load_keys(config.get('keys', {}))
-        self._load_datasource(**kwargs)
         self._load_modules(config.get('modules', []))
+        self._load_datasource(**kwargs)
 
     def _load_keys(self, key_source):
         keys = {}
@@ -162,6 +162,18 @@ class Host():
 class BaseOperation():
     hosts = []
     tasks = []
+    required_options = []
+
+    def __init__(self, name=None, options=None):
+        self.name = name
+        self.options = options or {}
+
+        for option in self.required_options:
+            if option not in self.options:
+                raise ValueError(str(self) + ' requires option: ' + option)
+
+    def get_type_name(self):
+        return self.__class__.__name__
 
     def get_hosts(self):
         return self.hosts    
@@ -183,13 +195,16 @@ class TaskShellHandler():
 class BaseTask():
     required_options = []
 
-    def __init__(self, **options):
-        self.options = options
+    def __init__(self, name=None, options=None):
+        self.name = name
+        self.options = options or {}
 
         for option in self.required_options:
             if option not in self.options:
                 raise ValueError(str(self) + ' requires option: ' + option)
 
+    def get_type_name(self):
+        return self.__class__.__name__
 
     def run(self, hosts):
         group = SSHGroup(hosts)
@@ -199,4 +214,9 @@ class HostQuery():
     pass
 
 class Environment():
-    pass
+    def __init__(self, name, attributes):
+        self.name = name
+        self.attributes = attributes
+
+    def get_type_name(self):
+        return self.__class__.__name__
