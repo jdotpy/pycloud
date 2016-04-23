@@ -1,3 +1,4 @@
+from paramiko.agent import Agent
 from paramiko.rsakey import RSAKey
 from Crypto.Cipher import PKCS1_OAEP, AES
 from Crypto.PublicKey import RSA
@@ -15,14 +16,22 @@ def generate_secret_key(length=128):
     key = b64encode(random).decode('utf-8')
     return key
 
+def get_agent_keys():
+    agent = Agent()
+    keys = [KeyPair(_key=key) for key in agent.get_keys()]
+    agent.close()
+    return keys
+
 class KeyPair():
     KEY_SIZE = 4096
 
-    def __init__(self, private_key=None, private_key_path=None, password=None):
+    def __init__(self, private_key=None, private_key_path=None, _key=None, password=None):
         if private_key:
             self._key = RSAKey(file_obj=io.StringIO(private_key))
         elif private_key_path:
             self._key = RSAKey(filename=private_key_path, password=password)
+        elif _key:
+            self._key = _key
         else:
             self._key = RSAKey.generate(self.KEY_SIZE)
 
