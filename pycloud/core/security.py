@@ -54,14 +54,20 @@ class KeyPair():
     def as_pycrypto(self):
         return RSA.importKey(self.private_key_str())
 
-    def encrypt(self, data, encoding='utf-8'):
+    def encrypt(self, data, encoding='utf-8', encode_payload=False):
         if isinstance(data, str) and encoding:
             data = data.encode(encoding)
         cipher = PKCS1_OAEP.new(self.as_pycrypto())
         ciphertext = cipher.encrypt(data)
-        return ciphertext
+        if encode_payload:
+            return base64.b64encode(ciphertext).decode('utf-8')
+        else:
+            return ciphertext
 
     def decrypt(self, ciphertext, encoding='utf-8'):
+        if isinstance(ciphertext, str):
+            ciphertext = base64.b64decode(ciphertext.encode('utf-8'))
+
         cipher = PKCS1_OAEP.new(self.as_pycrypto())
         data = cipher.decrypt(ciphertext)
         if encoding:
