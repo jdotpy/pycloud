@@ -122,6 +122,14 @@ class Vault():
         else:
             return user_key.decrypt(user_data['encrypted_key'])
 
+    def change_key(self):
+        old_key = self.get_encryption_key()
+        new_key = AESEncryption.generate_key()
+        for user in self.users:
+            print(user['public_key'])
+            user_key = KeyPair(pub_data=user['public_key'])
+            user['encrypted_key'] = user_key.encrypt(new_key)
+
     def load(self, metadata_only=False):
         if metadata_only:
             data_file = JsonVaultFile(self.data_file_location)
@@ -252,6 +260,14 @@ def vault_cli(source):
         user_name = action_args[0]
         user_key = KeyPair(private_key_path=os.path.expanduser(action_args[1]))
         vault.add_user(user_name, user_key)
+        vault.save()
+
+    elif action == 'change_key':
+        success = vault.load()
+        if not success:
+            print('Failed to decrypt')
+            return False
+        vault.change_key()
         vault.save()
 
     elif action == 'set': 

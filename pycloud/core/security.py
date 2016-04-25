@@ -9,7 +9,7 @@ import json
 import stat
 import os
 import io
-from base64 import b64encode
+from base64 import b64encode, b64decode
 
 def generate_secret_key(length=128):
     random = os.urandom(length)
@@ -25,11 +25,13 @@ def get_agent_keys():
 class KeyPair():
     KEY_SIZE = 4096
 
-    def __init__(self, private_key=None, private_key_path=None, _key=None, password=None):
+    def __init__(self, private_key=None, private_key_path=None, pub_data=None, _key=None, password=None):
         if private_key:
             self._key = RSAKey(file_obj=io.StringIO(private_key))
         elif private_key_path:
             self._key = RSAKey(filename=private_key_path, password=password)
+        elif pub_data:
+            self._key = RSAKey(data=b64decode(pub_data.encode('utf-8')))
         elif _key:
             self._key = _key
         else:
