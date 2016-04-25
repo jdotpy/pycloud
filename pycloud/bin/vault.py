@@ -9,7 +9,6 @@ import time
 import sys
 import os
 
-
 from pycloud.core.security import AESEncryption, KeyPair, get_agent_keys
 from pycloud.core.cli import user_edit
 
@@ -82,6 +81,7 @@ class Vault():
         self.user = user
         self.metadata = None
         self.data = None
+        self.users = None
         self.loaded = False
 
     def _path(self, path):
@@ -127,43 +127,65 @@ class Vault():
             data_file = JsonVaultFile(self.data_file_location)
             self.metadata = data_file.metadata()
         else:
-            data_file = JsonVaultFile(self.data_file_location, self.get_encryption_key())
+            encryption_key = self.get_encryption_key()
+            if not encryption_key:
+                return False
+            data_file = JsonVaultFile(self.data_file_location, encryption_key)
             self.metadata, self.data = data_file.read()
+        if self.key_db_location:
+            with open('r') as f:
+                self.users = json.loads(f.read())['users']
+        else:
+            self.users = self.metadata['users']
         self.loaded = True
+        return self.loaded
 
-    def save(self, data=None):
-        if not self.loaded:
-            return False
+    def save(self, data=None, create=False, encryption_key=None):
         if data is not None:
             self.data = data
-        data_file = JsonVaultFile(self.data_file_location, self.get_encryption_key())
-        data_file.write(self.data, self.metadata)
-        return True
 
-    def create(self, data=None):
-        encryption_key = AESEncryption.generate_key()
-        keypair = self.get_private_keys()[0]
-        encrypted_key = keypair.encrypt(encryption_key, encode_payload=True)
-        user_db = [{
-            'user': self.user,
-            'public_key': keypair.public_key_str(),
-            'encrypted_key': encrypted_key
-        }]
-        payload = data or {}
-        metdata = None
-        if not self.key_db_location:
-            metadata = {'users': user_db}
-
-        data_file = JsonVaultFile(self.data_file_location, encryption_key)
-        if data_file.exists():
+        if not self.loaded and not create:
             return False
-        data_file.write(payload, extra_metadata=metadata)
 
+        metadata = self.metadata or {}
         if self.key_db_location:
             with open(self.key_db_location, 'w') as f:
                 f.write(json.dumps({
-                    'users': user_db
+                    'users': self.users
                 }))
+        else:
+            metadata['users'] = self.users
+
+        if not create:
+            encryption_key = self.get_encryption_key()
+        data_file = JsonVaultFile(self.data_file_location, encryption_key)
+        data_file.write(self.data, metadata)
+        return True
+
+    def _add_user(self, user, keypair, encryption_key):
+        encrypted_key = keypair.encrypt(encryption_key, encode_payload=True)
+        user = {
+            'user': user,
+            'public_key': keypair.public_key_str(),
+            'encrypted_key': encrypted_key
+        }
+        if self.loaded:
+            self.users.append(user)
+        else:
+            self.users = [user]
+        return True
+
+    def add_user(self, user, keypair):
+        return self._add_user(user, keypair, self.get_encryption_key())
+
+    def create(self, data=None):
+        keypair = self.get_private_keys()[0]
+        encryption_key = AESEncryption.generate_key()
+        self._add_user(self.user, keypair, encryption_key)
+
+        payload = data or {}
+        metdata = None
+        self.save(payload, create=True, encryption_key=encryption_key)
 
 def vault_cli(source):
     parser = argparse.ArgumentParser(description='Create update')
@@ -185,25 +207,51 @@ def vault_cli(source):
         vault.create()
 
     elif action == 'view': 
-        vault.load()
-        pprint(vault.data)
+        success = vault.load()
+        if not success:
+            print('Failed to decrypt')
+        else:
+            pprint(vault.data)
 
     elif action == 'show_key': 
-        print(vault.get_encryption_key())
+        success = vault.load()
+        if not success:
+            print('Failed to decrypt')
+        else:
+            print(vault.get_encryption_key())
 
     elif action == 'edit': 
-        vault.load()
+        success = vault.load()
+        if not success:
+            print('Failed to decrypt')
+            return False
         tmp_file = args.vault + '.editing'
+        contents = json.dumps(vault.data, indent=4)
+        success = False
         for i in range(5):
-            new_contents = user_edit(tmp_file, json.dumps(vault.data, indent=4))
+            contents = user_edit(tmp_file, contents)
             try:
-                new_data = json.loads(new_contents)
+                new_data = json.loads(contents)
             except Exception as e:
                 print('Edit Result Error:', str(e))
                 time.sleep(4)
             else:
                 vault.data = new_data
+                success = True
                 break
+        if success:
+            vault.save()
+        else:
+            print('You failed too many times. Edits discarded.')
+
+    elif action == 'add_user':
+        success = vault.load()
+        if not success:
+            print('Failed to decrypt')
+            return False
+        user_name = action_args[0]
+        user_key = KeyPair(private_key_path=os.path.expanduser(action_args[1]))
+        vault.add_user(user_name, user_key)
         vault.save()
 
     elif action == 'set': 
