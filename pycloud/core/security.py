@@ -24,6 +24,7 @@ def get_agent_keys():
 
 class KeyPair():
     KEY_SIZE = 4096
+    SSH_PUB_KEY_PREFIX = 'ssh-rsa '
 
     def __init__(self, private_key=None, private_key_path=None, pub_data=None, _key=None, password=None):
         if private_key:
@@ -31,6 +32,8 @@ class KeyPair():
         elif private_key_path:
             self._key = RSAKey(filename=private_key_path, password=password)
         elif pub_data:
+            if pub_data.startswith(self.SSH_PUB_KEY_PREFIX):
+                pub_data = pub_data[len(self.SSH_PUB_KEY_PREFIX):]
             self._key = RSAKey(data=b64decode(pub_data.encode('utf-8')))
         elif _key:
             self._key = _key
@@ -38,7 +41,7 @@ class KeyPair():
             self._key = RSAKey.generate(self.KEY_SIZE)
 
     def public_key_str(self):
-        return self._key.get_base64()
+        return self.SSH_PUB_KEY_PREFIX + self._key.get_base64()
 
     def private_key_str(self):
         buf = io.StringIO()
@@ -54,7 +57,10 @@ class KeyPair():
         return self._key
 
     def as_pycrypto(self):
-        return RSA.importKey(self.private_key_str())
+        if self._key.can_sign():
+            return RSA.importKey(self.private_key_str())
+        else:
+            return RSA.importKey(self.public_key_str())
 
     def encrypt(self, data, encoding='utf-8', encode_payload=False):
         if isinstance(data, str) and encoding:
@@ -77,7 +83,8 @@ class KeyPair():
         return text
 
     def to_file(self, path, password=None):
-        self._key.write_private_key_file(path, password=password)
+        if self._key.can_sign():
+            self._key.write_private_key_file(path, password=password)
 
 class DecryptionError(ValueError):
     pass

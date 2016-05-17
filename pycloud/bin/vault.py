@@ -123,12 +123,14 @@ class Vault():
             return user_key.decrypt(user_data['encrypted_key'])
 
     def change_key(self):
+        if not self.loaded:
+            self.load()
         old_key = self.get_encryption_key()
         new_key = AESEncryption.generate_key()
         for user in self.users:
-            print(user['public_key'])
             user_key = KeyPair(pub_data=user['public_key'])
-            user['encrypted_key'] = user_key.encrypt(new_key)
+            user['encrypted_key'] = user_key.encrypt(new_key, encode_payload=True)
+        self.save(encryption_key=new_key)
 
     def load(self, metadata_only=False):
         if metadata_only:
@@ -148,11 +150,11 @@ class Vault():
         self.loaded = True
         return self.loaded
 
-    def save(self, data=None, create=False, encryption_key=None):
+    def save(self, data=None, encryption_key=None):
         if data is not None:
             self.data = data
 
-        if not self.loaded and not create:
+        if not self.loaded:
             return False
 
         metadata = self.metadata or {}
@@ -164,7 +166,7 @@ class Vault():
         else:
             metadata['users'] = self.users
 
-        if not create:
+        if encryption_key is None:
             encryption_key = self.get_encryption_key()
         data_file = JsonVaultFile(self.data_file_location, encryption_key)
         data_file.write(self.data, metadata)
@@ -187,13 +189,15 @@ class Vault():
         return self._add_user(user, keypair, self.get_encryption_key())
 
     def create(self, data=None):
+        self.users = []
+        self.loaded = True
         keypair = self.get_private_keys()[0]
         encryption_key = AESEncryption.generate_key()
         self._add_user(self.user, keypair, encryption_key)
 
         payload = data or {}
         metdata = None
-        self.save(payload, create=True, encryption_key=encryption_key)
+        self.save(payload, encryption_key=encryption_key)
 
 def vault_cli(source):
     parser = argparse.ArgumentParser(description='Create update')
@@ -262,7 +266,7 @@ def vault_cli(source):
         vault.add_user(user_name, user_key)
         vault.save()
 
-    elif action == 'change_key':
+    elif action == 'rotate_key':
         success = vault.load()
         if not success:
             print('Failed to decrypt')
